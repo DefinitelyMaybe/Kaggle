@@ -1,5 +1,6 @@
 import csv, pickle
-from sklearn import linear_model
+from sklearn import linear_model, tree
+from sklearn.datasets import load_iris
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -32,7 +33,7 @@ class Person(object):
                 self.Fare,
                 self.Embarked
                 ]
-        self.variablesNotUsedYet = [self.Cabin, self.Ticket]
+        self.variablesNotUsedYet = [self.Name, self.Cabin, self.Ticket]
         self.target = self.Survived
 
     def __repr__(self):
@@ -43,7 +44,10 @@ class Person(object):
         args["PassengerId"] = int(args["PassengerId"])
 
         #Survived := 1 means survived, 0 did not.
-        args["Survived"] = int(args["Survived"])
+        try:
+            args["Survived"] = int(args["Survived"])
+        except Exception as e:
+            args["Survived"] = None
 
         # Pclass := {1st, 2nd, 3rd} aka ticket class
         try:
@@ -97,6 +101,7 @@ class Person(object):
             args["Fare"] = float(args["Fare"])
         except Exception as e:
             print("check this: Fare - " + args["Fare"])
+            args["Fare"] = 0.0
 
         # cabin := Cabin number
         # leaving cabin data for the moment
@@ -160,128 +165,93 @@ class Person(object):
 
         return arg
 
-def getRowInt(attr):
-    # PassengerId,Survived,Pclass,Name,Sex,Age,SibSp,Parch,Ticket,Fare,Cabin,Embarked
-    switch = {
-        "PassengerId": 0,
-        "Survived":1,
-        "Pclass":2,
-        "Name":3,
-        "Sex":4,
-        "Age":5,
-        "SibSp":6,
-        "Parch":7,
-        "Ticket":8,
-        "Fare":9,
-        "Cabin":10,
-        "Embarked":11
-    }
-    return switch[attr]
-
-def cleanAgeDataforArray(arg):
-    if len(arg) == 4:
-        if (arg[1]) == ".":
-            arg = arg[1:]
+def csvFileToArray(filename):
+    def rowToDict(row):
+        data = {}
+        if len(row) == 12:
+            data["PassengerId"] = row[0]
+            data["Survived"] = row[1]
+            data["Pclass"] = row[2]
+            data["Name"] = row[3]
+            data["Sex"] = row[4]
+            data["Age"] = row[5]
+            data["SibSp"] = row[6]
+            data["Parch"] = row[7]
+            data["Ticket"] = row[8]
+            data["Fare"] = row[9]
+            data["Cabin"] = row[10]
+            data["Embarked"] = row[11]
         else:
-            arg = arg[:-2]
-    if len(arg) == 3:
-        arg = arg[1:]
-    if len(arg) == 0:
-        arg = "0"
-    return arg
+            data["PassengerId"] = row[0]
+            data["Pclass"] = row[1]
+            data["Name"] = row[2]
+            data["Sex"] = row[3]
+            data["Age"] = row[4]
+            data["SibSp"] = row[5]
+            data["Parch"] = row[6]
+            data["Ticket"] = row[7]
+            data["Fare"] = row[8]
+            data["Cabin"] = row[9]
+            data["Embarked"] = row[10]
+        return data
 
-def cleanAgeDataforDict(arg):
-    if len(arg) == 1:
-        arg = "0{}".format(arg)
-    if len(arg) == 4:
-        if (arg[1]) == ".":
-            arg = arg[1:]
-        else:
-            arg = arg[:-2]
-    if len(arg) == 3:
-        arg = arg[1:]
-    if len(arg) == 0:
-        arg = "0"
-    return arg
-
-def rowToDict(row):
-    data = {}
-    data["PassengerId"] = row[0]
-    data["Survived"] = row[1]
-    data["Pclass"] = row[2]
-    data["Name"] = row[3]
-    data["Sex"] = row[4]
-    data["Age"] = row[5]
-    data["SibSp"] = row[6]
-    data["Parch"] = row[7]
-    data["Ticket"] = row[8]
-    data["Fare"] = row[9]
-    data["Cabin"] = row[10]
-    data["Embarked"] = row[11]
-    return data
-
-def valuesFromRowstoArray(rows, value, options={}):
-    data = []
-    skip = True
-    index = getRowInt(value)
-    for row in rows:
-        #need to ignore the first row of csv data
-        if skip:
+    with open(filename, "r") as f:
+        datarows = csv.reader(f)
+        data = []
+        skip = True
+        for row in datarows:
             if skip:
                 skip = False
-        else:
-            #rules for all the different value strings i.e. 45.5, .83, 1, ' '
-            value = row[index]
-            #index == 5 is Age
-            if index == 5:
-                value = cleanAgeDataforArray(value)
-            data += [int(value)]
-    return data
+            else:
+                data += [Person(rowToDict(row))]
+        return data
 
-def histogramOfAttr(data, attr):
-    # Assumptions made: attr is only ever age.
-    d = valuesFromRowstoArray(data, attr)
-    x = np.array(d)
-    x = x[x.nonzero()]
+def modelFromPKL(filename):
+    with open(filename, "rb") as f:
+        return pickle.load(f)
 
-    fig, ax = plt.subplots()
-
-    n, bins, patches = ax.hist(x, 100)
-
-    ax.set_ylabel("count")
-    ax.set_xlabel("age")
-    plt.grid(True)
-    plt.show()
-
-if __name__ == '__main__':
-    #with open("test.pkl", "rb") as f:
+def histogramOfAges():
+    with open("test.pkl", "rb") as f:
         # PassengerId,Survived,Pclass,Name,Sex,Age,SibSp,Parch,Ticket,Fare,Cabin,Embarked
         # 891,        0,       3,    "Doo",male,32,0,    0,    370376, 7.75,  ,  Q
-        #people = pickle.load(f)
-        #print(people)
+
+        # 0 is False and means they did not survive
+        people = pickle.load(f)
+
+        survivors = [p for p in people if p.Survived]
+        nonSurvivors = [p for p in people if not p.Survived]
+
+
+        sAgesData = [p.Age for p in survivors]
+        sAgesData = np.array(sAgesData)
+        sAgesData = sAgesData[sAgesData.nonzero()]
+
+        nsAgesData = [p.Age for p in nonSurvivors]
+        nsAgesData = np.array(nsAgesData)
+        nsAgesData = nsAgesData[nsAgesData.nonzero()]
+
         with plt.xkcd():
-            fig = plt.figure()
-            ax = fig.add_axes((0.1, 0.2, 0.8, 0.7))
-            ax.bar([0, 1], [0, 100], 0.25)
-            ax.spines['right'].set_color('none')
-            ax.spines['top'].set_color('none')
-            plt.xticks([])
-            plt.yticks([])
-            ax.set_ylim([-30, 10])
+            fig, ax = plt.subplots()
 
-            data = np.ones(100)
-            data[70:] -= np.arange(30)
+            n, bins, patches = ax.hist([sAgesData,nsAgesData], 100, stacked=True, cumulative=True)
 
-            plt.annotate(
-                'THE DAY I REALIZED\nI COULD COOK BACON\nWHENEVER I WANTED',
-                xy=(70, 1), arrowprops=dict(arrowstyle='->'), xytext=(15, -10))
+            #fig.tight_layout()
 
-            plt.plot(data)
-
-            plt.xlabel('time')
-            plt.ylabel('my overall health')
-            fig.text(
-                0.5, 0.05,
-                '"Stove Ownership" from xkcd by Randall Monroe',
-                ha='center')
+            plt.xlabel('age')
+            plt.ylabel('count')
             plt.show()
+
+if __name__ == '__main__':
+    x = csvFileToArray("test.csv")
+    c = 892
+    x = np.array([i.variables for i in x])
+    #print(x)
+    decisionTree = modelFromPKL("titanicDecisionTreeModel-1.pkl")
+
+    with open("submission-1.csv", "w") as f:
+        csvFile = csv.writer(f)
+        csvFile.writerow(["PassengerId","Survived"])
+        for p in x:
+            y = decisionTree.predict([p])
+            csvFile.writerow([c,y[0]])
+            c += 1
