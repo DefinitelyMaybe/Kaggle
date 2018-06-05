@@ -1,8 +1,12 @@
 import csv, pickle
-from sklearn import linear_model, tree
-from sklearn.datasets import load_iris
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import numpy as np
+import keras
+
+from keras.utils.np_utils import to_categorical  # convert to one-hot-encoding
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Flatten, Conv2D, MaxPool2D
+from keras.optimizers import RMSprop
 
 class Person(object):
     """Represents a person on the titanic"""
