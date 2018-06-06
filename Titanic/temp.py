@@ -1,50 +1,92 @@
-import csv
-import re
+import csv, re
+import numpy as np
+from keras import Sequential
+from keras.layers import Dense
 
 # Age patterns
 p1 = re.compile(r"0\.")
-p2 = re.compile(r".+\.5")
 # Ticket patterns
-p3 = re.compile(r"$\d*\s")
+p3 = re.compile(r"(\d*?)$")
 
-with open("train.csv", mode='r') as f:
-    x = csv.reader(f)
-    c = []
-    for i in x:
-        y = i[8].strip()
-        match = p3.match(y)
-        if match != None:
-            print(y, " : ", match.group(0))
+def getAge(arg):
+    fract = p1.match(arg)
+    if arg == "":
+        return 32
+    elif arg[:2] == "0.":
+        return int(arg[fract.span()[1]:])
+    elif arg[-2:] == ".5":
+        return int(arg[:-2])
+    else:
+        return int(arg)
 
-        # id
-        # pclass - gets everything with [1, 2, 3]
-        # name.. not sure what to do with this one
-    """p1 = re.compile(r".*,")
-        names = []
-        for i in x:
-            y = i[2]
-            y2 = p1.match(y)
-            if y2 != None:
-                name = y2.group(0)[:-1]
-                if not name in names:
-                    names += [name]
-        print(names)
-        print(len(names))"""
-        # sex -["male", "female"] gets everything
-        # age - little bit of work but done
-    """#Get the fractional ages
-        fract = p1.match(y)
-        #Get approximate ages
-        approx = p2.match(y)
-        if y == "":
-            pass
-        elif fract != None:
-            y = y[:fract.span()[0]]
-        elif approx != None:
-            y = y[approx.span()[1]:]
-        elif y == "Age":
+def getTicket(arg):
+    search = p3.search(arg)
+    ticket = arg[search.span()[0]:]
+    if ticket == "":
+        return 0
+    else:
+        return int(ticket)
+
+def dataclean(inputarray):
+    #PassengerId,Survived,Pclass,Name,Sex,Age,SibSp,Parch,Ticket,Fare,Cabin,Embarked
+    output = []
+    v = 1
+    embarkedMapping = {"S":1, "Q":2, "C":3, "":1}
+    # skipping the first row
+    for row in inputarray:
+        if row[0] == "PassengerId":
             pass
         else:
-            y = int(y)"""
-        # SibSp with ['1', '0', '3', '4', '2', '5', '8']
-        # Parch with ['0', '1', '2', '5', '3', '4', '6']
+            if len(row) == 12:
+                v = 2
+            pclass = int(row[v].strip())
+            name = row[v+1].strip()
+            sex = 0 if row[v+2].strip() == "male" else 1
+            age = getAge(row[v+3].strip())
+            x = row[v+4].strip()
+            sibsp = int(x) if x in ['1', '0', '3', '4', '2', '5', '8'] else 0
+            x = row[v+5].strip()
+            parch = int(x) if x in ['0', '1', '2', '5', '3', '4', '6'] else 0
+            ticket = getTicket(row[v+6].strip())
+            fare = float(row[v+7].strip())
+            # Cabin - skip
+            cabin = row[v+8].strip()
+            embarked = embarkedMapping[row[v+9].strip()]
+
+            output += [[pclass, sex, age, sibsp, parch, fare, embarked]]
+    return output
+
+def getlabels(arg):
+    labels = []
+    for row in arg:
+        if row[0] == "PassengerId":
+            pass
+        else:
+            labels += [int(row[1])]
+    return labels
+
+with open("train.csv", mode='r') as f:
+    x = list(csv.reader(f))
+    x_train = dataclean(x)
+    y_train = getlabels(x)
+
+    x_test = np.array(x_train[-100:])
+    y_test = np.array(y_train[-100:])
+
+    x_train = np.array(x_train[:-100])
+    y_train = np.array(y_train[:-100])
+
+    model = Sequential()
+    model.add(Dense(7, input_shape=(7,)))
+    model.add(Dense(3))
+    model.add(Dense(1, activation="softmax"))
+
+    model.compile(loss='binary_crossentropy',
+              optimizer='sgd',
+              metrics=['accuracy'])
+
+    history = model.fit(x_train, y_train, epochs=5)
+
+    score = model.evaluate(x_test, y_test)
+
+    print(score)
